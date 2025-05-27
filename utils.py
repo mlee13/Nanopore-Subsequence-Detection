@@ -1,6 +1,6 @@
 import os
 import numpy as np
-
+import random
 
 def create_run_cmds(path, is_ideal):
     # /home/ml4320/squigulator-v0.4.0/signal_input/test1
@@ -48,3 +48,7 @@ def count_base_content(sequence):
     percentage.append(base_counts['T'] / len(sequence) * 100)
 
     return base_counts, percentage
+
+
+def create_random_sequence(length):
+    return ''.join(random.choices("AGCT", k=length))

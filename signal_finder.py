@@ -43,10 +43,13 @@ def calculate_prob(
     signal = (signal - np.mean(signal)) / np.std(signal)
 
     for rec in recs:
-        target = u.trim_padding(np.array(rec['signal'], dtype=np.int16))
-        target = (target - np.mean(target)) / np.std(target)
+        target_ncc = np.array(rec['signal'], dtype=np.int16)
+        target = (target_ncc - np.mean(target_ncc)) / np.std(target_ncc)
 
-        prob, pos = m.ncc_match((target), signal)
+        prob, pos = m.euclidean_distance_match((target), signal)
+        print(f"Euclidean Match probability: {prob:.2f}% at position {pos}")
+
+        prob, pos = m.ncc_match((target_ncc), signal)
         print(f"NCC Match probability: {prob:.2f}% at position {pos}")
 
         best_distance, best_index, match_prob = m.fastdtw_subsequence_match(target, signal, radius=2, stride=10)
@@ -84,15 +87,23 @@ if __name__ == "__main__":
     # calculate_prob("/Users/yminsele/IdeaProjects/tempFYP/signal_output/random250_40_ideal.blow5",
     #                "/Users/yminsele/IdeaProjects/tempFYP/signal_output/random250_fullcontig.blow5", 10)
 
-    # calculate_prob("/Users/yminsele/IdeaProjects/tempFYP/signal_output/acgt_five_50_ideal.blow5",
-    #                "/Users/yminsele/IdeaProjects/tempFYP/signal_output/acgt_five_fullcontig.blow5", 10)
+    # print("Using ideal target")
+    # calculate_prob("signal_output/non-matches/cont_hmp_non_match_20_2_ideal.blow5",
+    #                "signal_output/test_signals/cont_hmp_clean.blow5", 1)
+    
+    # print("Using clean target")
+    # calculate_prob("signal_output/non-matches/random250_non_match_20_2_clean.blow5",
+    #                "signal_output/test_signals/random250_clean.blow5", 1)
     
     # for signal in os.listdir(out_path):
     #     v.plot_blow5_signal(out_path + signal, num_reads=1)
 
-    # v.plot_blow5_signal("/Users/yminsele/IdeaProjects/tempFYP/signal_output/kmer_test.blow5", num_reads=10)
+    v.plot_blow5_signal("signal_output/test_signals/random250_clean.blow5")
+    v.plot_blow5_signal("signal_output/test_signals/random250_noise.blow5")
 
-    count, percentages = u.count_base_content("ctaggggtcagtctacggcgttggtagcgcactggccgattgcgcaagcctgatgctggatgggcatctgagcagggtttgaccgctgcacggtaggtcatggctggtgacggctcgctgtttcgtgcagcttggcgctttttgatggcgtggtttgtgatggctgttcccatggtggttctgtacagcggctttcggtccgggagggggtttgtcgcctccaggtctcgtgactccgctttttcgtgtg")
-    print(f"Base content: {count} with percentages: {percentages}")
+    # count, percentages = u.count_base_content("ctaggggtcagtctacggcgttggtagcgcactggccgattgcgcaagcctgatgctggatgggcatctgagcagggtttgaccgctgcacggtaggtcatggctggtgacggctcgctgtttcgtgcagcttggcgctttttgatggcgtggtttgtgatggctgttcccatggtggttctgtacagcggctttcggtccgggagggggtttgtcgcctccaggtctcgtgactccgctttttcgtgtg")
+    # print(f"Base content: {count} with percentages: {percentages}")
 
     # u.create_run_cmds("/home/ml4320/squigulator-v0.4.0/signal_input/test0", True)
+
+    # print(u.create_random_sequence(20))

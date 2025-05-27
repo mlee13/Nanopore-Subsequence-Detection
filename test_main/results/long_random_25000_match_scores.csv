@@ -1,0 +1,2 @@
+RunID,Filename,TargetLength,EucScore,NCCScore,DTWScore,EucAlign,NCCAlign,DTWAlign,ExpectedLabel,ActualLabel
+1,target_1.fa,20,58.311765922094494,85.08649695034657,75.63860953139192,107787,107787,207860,match,match

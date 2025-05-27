@@ -19,22 +19,27 @@ match_output_signal_dir = "test_main/match_signals"
 non_match_input_seq_dir = "test_main/non_match_sequences"
 non_match_output_signal_dir = "test_main/non_match_signals"
 
+# Reduce test signal length
+# Output time per operation
+# make sure target / non-target names change so it doesnt override
 
 # ===== CONFIGS ===== should modify each run!!!
-num_targets = 1
-target_min_length = 65
-target_max_length = 65
+num_targets = 2
+target_min_length = 20
+target_max_length = 20
 target_bias_length = 0
 match_mode = "non-match" # Options are "match" or anything else is non-match
 
-curr_last_target_idx = 37 # last idx of target in match/non-match directory
+curr_last_target_idx = 0 # last idx of target in match/non-match directory
 
 # Test signal details
-test_sequence_path = "signal_input/test_signals/random250.fa"
-test_signal_path = "signal_output/test_signals/random250_clean.blow5"
+# test_sequence_path = "signal_input/test_signals/random250.fa"
+# test_signal_path = "signal_output/test_signals/random250_noise.blow5"
+test_sequence_path = "test_main/test_signals/long_random_25000.fa"
+test_signal_path = "test_main/test_signals/long_random_25000_clean.blow5"
 
 # Results
-results_csv = f"test_main/results/random250_non_match_scores.csv"
+results_csv = f"test_main/results/long_random_25000_non_match_scores.csv"
 # results_csv = f"test_main/results/match_scores_{curr_last_target_idx + 1}-{curr_last_target_idx + num_targets}.csv"
 
 #====================
@@ -216,8 +221,7 @@ def generate_test_signal(length, filename, filedir_seq, filedir_signal):
     signal_seq = u.create_random_sequence(length)
     
     # Initialise name for files (target)
-    filename = f"{filename}.fa"
-    fasta_path = os.path.join(filedir_seq, filename)
+    fasta_path = os.path.join(filedir_seq, f"{filename}.fa")
     signal_path = os.path.join(filedir_signal, f"{filename}_clean.blow5")
 
     # Create fasta, run squigulator on it
@@ -238,4 +242,4 @@ if __name__ == "__main__":
         and (confirm_result_csv.lower() == 'y' or confirm_result_csv.lower() == 'yes')):
         run_experiment()
 
-    # generate_test_signal(3000)
+    # generate_test_signal(25000, "long_random_25000", "test_main/test_signals", "test_main/test_signals")
