@@ -1,0 +1,2 @@
+RunID,Filename,TargetLength,EucScore,NCCScore,DTWScore,EucAlign,NCCAlign,DTWAlign,dtwBestDist,ExpectedLabel,ActualLabel
+long_random_10000_long_targets_target_1.fa | Target Length: 956 | Euclidean Score: 26.49, NCC Score: 11.85, DTW Score: 80.51 | Euclidean Align: 7759, NCC Align: 56686, DTW Align: 9000, DTWBestDist: 2.7531178507735947 | Mode: match | Outcome: match

@@ -9,22 +9,8 @@ def plot_blow5_signal(
     read_id: str = None,
     num_reads: int = 1
 ) -> None:
-    """
-    Open a BLOW5 file, fetch 'num_reads' reads (or the specified read_id),
-    convert the raw signal to picoamperes, and plot each signal trace.
-
-    Parameters
-    ----------
-    blow5_path : str
-        Path to the .blow5 file.
-    read_id : str, optional
-        Specific read ID to plot. If None, plots the first 'num_reads' reads.
-    num_reads : int
-        Number of reads to plot (only used if read_id is None).
-    """
-
-    # Open the file in read-only mode. An index will be built or loaded automatically.
-    s5 = pyslow5.Open(blow5_path, 'r')  # :contentReference[oaicite:0]{index=0}
+    
+    s5 = pyslow5.Open(blow5_path, 'r')  
 
     if read_id is not None:
         # Fetch a single read by ID
@@ -68,8 +54,63 @@ def plot_blow5_signal(
         plt.plot(time_s, current_pA)
         plt.xlabel('Time (s)')
         plt.ylabel('Current (pA)')
-        plt.title(f"Read ID: {rec['read_id']}")
+        # plt.title(f"Read ID: {rec['read_id']}")
         plt.tight_layout()
         plt.show()
+
+    s5.close()
+
+
+def plot_overlay(
+    blow5_path: str,
+    blow5_path2: str,
+    align_start: int
+) -> None:
+    
+    s5 = pyslow5.Open(blow5_path, 'r')  
+    s52 = pyslow5.Open(blow5_path2, 'r')  
+
+    it = s5.seq_reads() 
+    rec = (next(it))
+
+    it2 = s52.seq_reads() 
+    rec2 = (next(it2))
+
+    raw = np.array(rec['signal'], dtype=np.int16)
+    raw2 = np.array(rec2['signal'], dtype=np.int16)
+
+    digitisation = rec['digitisation']
+    range_        = rec['range']
+    offset        = rec['offset']
+    samp_rate     = rec['sampling_rate']
+
+    print(rec['read_id'])
+    print("raw signal size: ", len(raw))
+    print("samp rate: ", samp_rate)
+    print("")
+
+    # Convert to picoamperes: pA = (raw + offset) * (range / digitisation)
+    # (see SLOW5 format specification) :contentReference[oaicite:1]{index=1}
+    current_pA = (raw + offset) * (range_ / digitisation)
+
+    # Build a time axis in seconds
+    time_s = np.arange(len(current_pA)) / samp_rate
+
+    plt.figure(figsize=(10, 4))
+
+    # test signal: shown in full
+    plt.plot(range(len(raw2)), raw2, label="Test Signal", linewidth=2)
+
+    # target signal: overlay starting at align_start
+    plt.plot(range(align_start, align_start + len(raw)), raw, label="Target Signal", linestyle='--', linewidth=2)
+
+    plt.title(f"Signal Overlap Starting at Position {align_start}")
+    plt.xlabel("Position Index (in the number of samples)")
+    plt.ylabel("Amplitude")
+    plt.legend()
+    plt.tight_layout()
+    plt.grid(False)
+    plt.show()
+
 
     s5.close()

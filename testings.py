@@ -5,7 +5,7 @@ from scipy.ndimage import median_filter
 from scipy.stats import linregress
 from fastdtw import fastdtw
 from scipy.spatial.distance import euclidean
-# import pywt
+import pywt
 import matchers as m
 import os
 
@@ -24,23 +24,23 @@ def correct_signal_baseline(signal, window_size=200):
         return corrected_signal
 
 
-# def denoise_signal_wavelet(signal, wavelet='db4', level=4, thresholding='soft'):
-#     # Perform wavelet decomposition
-#     coeffs = pywt.wavedec(signal, wavelet, level=level)
+def denoise_signal_wavelet(signal, wavelet='db4', level=4, thresholding='soft'):
+    # Perform wavelet decomposition
+    coeffs = pywt.wavedec(signal, wavelet, level=level)
 
-#     # Estimate noise level (Median Absolute Deviation method)
-#     sigma = np.median(np.abs(coeffs[-1])) / 0.6745
+    # Estimate noise level (Median Absolute Deviation method)
+    sigma = np.median(np.abs(coeffs[-1])) / 0.6745
 
-#     # Set universal threshold
-#     threshold = sigma * np.sqrt(2 * np.log(len(signal)))
+    # Set universal threshold
+    threshold = sigma * np.sqrt(2 * np.log(len(signal)))
 
-#     # Apply thresholding to detail coefficients
-#     new_coeffs = [coeffs[0]] + [pywt.threshold(c, threshold, mode=thresholding) for c in coeffs[1:]]
+    # Apply thresholding to detail coefficients
+    new_coeffs = [coeffs[0]] + [pywt.threshold(c, threshold, mode=thresholding) for c in coeffs[1:]]
 
-#     # Reconstruct the denoised signal
-#     denoised_signal = pywt.waverec(new_coeffs, wavelet)
+    # Reconstruct the denoised signal
+    denoised_signal = pywt.waverec(new_coeffs, wavelet)
 
-#     return denoised_signal
+    return denoised_signal
 
 
 def plot_blow5_signal(
@@ -469,6 +469,41 @@ def calculate_prob(
 
 
 if __name__ == "__main__":
+
+    # Data from the table
+    lengths = [1000, 5000, 10000, 20000, 30000]
+    dtw_match = [97.4, 74.1, 68.5, 64.8, 62.5]
+    dtw_nonmatch = [71.5, 60.5, 57.2, 55.8, 55.1]
+    gaps = [m - n for m, n in zip(dtw_match, dtw_nonmatch)]
+
+    import matplotlib.pyplot as plt
+
+    # Plot both match and non-match as lines
+    plt.figure(figsize=(10, 6))
+    plt.plot(lengths, dtw_match, marker='o', label='Match', color='tab:blue')
+    plt.plot(lengths, dtw_nonmatch, marker='o', label='Non-Match', color='tab:orange')
+
+    # Add match and non-match score annotations
+    for x, match_y, nonmatch_y in zip(lengths, dtw_match, dtw_nonmatch):
+        plt.text(x, match_y + 1, f'{match_y:.1f}', ha='center', va='bottom', fontsize=9, fontweight='bold', color='tab:blue')
+        plt.text(x, nonmatch_y - 1, f'{nonmatch_y:.1f}', ha='center', va='top', fontsize=9, fontweight='bold', color='tab:orange')
+
+    # Highlight gaps with vertical lines and annotate them
+    for x, y1, y2 in zip(lengths, dtw_match, dtw_nonmatch):
+        plt.vlines(x, y2, y1, color='gray', linestyle='dashed', alpha=0.7)
+        gap = y1 - y2
+        plt.text(x, (y1 + y2) / 2, f'{gap:.1f}', ha='center', va='center', fontsize=10, color='black', backgroundcolor='white')
+
+    # Axis and layout
+    plt.xlabel('Test Signal Length (samples)')
+    plt.ylabel('Mean DTW Score')
+    plt.title('Average DTW Scores & Match–Non-Match Gap Trends with Test Signal Length')
+    plt.xticks(lengths, [f'{l:,}' for l in lengths])  # Custom x-tick labels with commas
+    plt.grid(True, color='lightgray')
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
     # simulate matching segments
     # signal = np.concatenate([np.random.randn(500), np.sin(np.linspace(0, 5*np.pi, 100)), np.random.randn(500)])
     # target = np.sin(np.linspace(0, 5*np.pi, 100))
@@ -483,11 +518,11 @@ if __name__ == "__main__":
 
     # out_path = "/home/ml4320/squigulator-v0.4.0/signal_output/test0/"
 
-    calculate_prob("/Users/yminsele/IdeaProjects/tempFYP/signal_output/random250_rand40_ideal.blow5",
-                   "/Users/yminsele/IdeaProjects/tempFYP/signal_output/random250_ideal.blow5", 10)
+    # calculate_prob("/Users/yminsele/IdeaProjects/tempFYP/signal_output/random250_rand40_ideal.blow5",
+    #                "/Users/yminsele/IdeaProjects/tempFYP/signal_output/random250_ideal.blow5", 10)
 
-    calculate_prob("/Users/yminsele/IdeaProjects/tempFYP/signal_output/acgt_five_50_ideal.blow5",
-                   "/Users/yminsele/IdeaProjects/tempFYP/signal_output/acgt_five_ideal.blow5", 10)
+    # calculate_prob("/Users/yminsele/IdeaProjects/tempFYP/signal_output/acgt_five_50_ideal.blow5",
+                #    "/Users/yminsele/IdeaProjects/tempFYP/signal_output/acgt_five_ideal.blow5", 10)
 
     # for signal in os.listdir(out_path):
     #     plot_blow5_signal(out_path + signal, num_reads=5)

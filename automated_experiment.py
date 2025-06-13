@@ -7,39 +7,40 @@ import numpy as np
 import utils as u
 import matchers as m
 from Bio import SeqIO
+from math import isclose
 
 
 # === VARIABLES ===
-squigulator_path = "./squigulator"  # Path to Squigulator binary
+squigulator_path = "../squigulator/squigulator"  # Path to Squigulator binary
 
-# Target details
-match_input_seq_dir = "test_main/match_sequences"
-match_output_signal_dir = "test_main/match_signals"
-
-non_match_input_seq_dir = "test_main/non_match_sequences"
-non_match_output_signal_dir = "test_main/non_match_signals"
-
-# Reduce test signal length
-# Output time per operation
-# make sure target / non-target names change so it doesnt override
 
 # ===== CONFIGS ===== should modify each run!!!
-num_targets = 2
-target_min_length = 20
-target_max_length = 20
+num_targets = 50
+target_min_length = 15
+target_max_length = 50
 target_bias_length = 0
-match_mode = "non-match" # Options are "match" or anything else is non-match
+match_expectation = "both" # Options are "match" or anything else is non-match
 
-curr_last_target_idx = 0 # last idx of target in match/non-match directory
+# Override till 79 80-109 used for exp!
+curr_last_target_idx = 0 # this +1 is our starting taregt! last idx of target in match/non-match directory
+use_existing_target = True # If true, make sure that the targets exist!
 
-# Test signal details
-# test_sequence_path = "signal_input/test_signals/random250.fa"
-# test_signal_path = "signal_output/test_signals/random250_noise.blow5"
-test_sequence_path = "test_main/test_signals/long_random_25000.fa"
-test_signal_path = "test_main/test_signals/long_random_25000_clean.blow5"
+# Test signal details - CHECK BOTH!
+test_signal_name = "long_random_10000"
+redirected_target_name = "long_random_10000"
 
-# Results
-results_csv = f"test_main/results/long_random_25000_non_match_scores.csv"
+test_sequence_path = f"test_main/test_signals/{redirected_target_name}.fa"
+test_signal_path = f"test_main/test_signals/{test_signal_name}_clean.blow5"
+
+
+# Target details
+match_input_seq_dir = f"test_main/match_sequences/{redirected_target_name}"
+match_output_signal_dir = f"test_main/match_signals/{redirected_target_name}"
+
+non_match_input_seq_dir = f"test_main/non_match_sequences/{redirected_target_name}"
+non_match_output_signal_dir = f"test_main/non_match_signals/{redirected_target_name}"
+
+# Results automated below runexperiment
 # results_csv = f"test_main/results/match_scores_{curr_last_target_idx + 1}-{curr_last_target_idx + num_targets}.csv"
 
 #====================
@@ -101,33 +102,48 @@ def compute_match_probability(algoCode, target_path, signal_path):
     test_signal_record = next(s5_test_signal.seq_reads())
 
     test_signal =  np.array(test_signal_record['signal'], dtype=np.int16)
-    test_signal = (test_signal - np.mean(test_signal)) / np.std(test_signal)
+    # test_signal = u.denoise_signal_wavelet(u.correct_signal_baseline(test_signal))
+    # test_signal = (test_signal_unnormalised - np.mean(test_signal_unnormalised)) / np.std(test_signal_unnormalised)
     
-    target_ncc = np.array(target_record['signal'], dtype=np.int16)
-    target = (target_ncc - np.mean(target_ncc)) / np.std(target_ncc)
+    target = np.array(target_record['signal'], dtype=np.int16)
+    target = (target - np.mean(target)) / np.std(target)
 
     algoCode = algoCode.upper()
+    best_distance = 0
 
     if algoCode == "EUC":
         prob, best_idx = m.euclidean_distance_match(target, test_signal)
         # print(f"Euclidean Match probability: {prob:.2f}% at position {pos}")
     elif algoCode == "NCC":
-        prob, best_idx = m.ncc_match(target_ncc, test_signal)
+        prob, best_idx = m.ncc_match(target, test_signal)
         # print(f"NCC Match probability: {prob:.2f}% at position {pos}")
     elif algoCode == "DTW":
-        best_distance, best_idx, prob = m.fastdtw_subsequence_match(target, test_signal, radius=2, stride=10)
+        best_distance, best_idx, prob = m.fastdtw_subsequence_match(target, test_signal)
+        # best_distance, best_idx, prob = m.fastdtw_subsequence_match(target, test_signal, radius=1, stride=5)
         # print(f"Fast DTW Match probability: {match_prob:.2f}% at position {best_index}, with dist: {best_distance}")
     else:
         print("HUH")
 
-    return prob, best_idx
+    return prob, best_idx, best_distance
 
-def get_match_outcome(ncc_score, dtw_score):
-    if (ncc_score >= 80 or dtw_score >= 65 or 
-        (ncc_score >= 70 and dtw_score >= 60)):
+def close_alignment_ncc(ncc_align, dtw_align, percentage, ncc_score, NCCBestDTWAlign, accept_score):
+    close_alignment = isclose(ncc_align, dtw_align, rel_tol=percentage, abs_tol=0.0)
+    return (close_alignment and ncc_score >= accept_score) or NCCBestDTWAlign >= accept_score
+
+
+def get_match_outcome(ncc_score, dtw_score, ncc_align, dtw_align):
+    # Alignment position of ncc and dtw within 10%
+    close_alignment = isclose(ncc_align, dtw_align, rel_tol=0.10, abs_tol=0.0)
+
+    if (ncc_score >= 85 or 
+        dtw_score >= 63 or 
+        (ncc_score >= 70 and dtw_score >= 60 and close_alignment) or 
+        (ncc_score >= 75 and dtw_score >= 55 and close_alignment) or
+        (ncc_score >= 80 and dtw_score > 50 and close_alignment)):
         return "match"
     
-    if (dtw_score > 55 and dtw_score < 65):
+    if ((dtw_score >= 60 and dtw_score < 63) or 
+        (dtw_score > 55 and ncc_score >= 70 and close_alignment)):
         return "undefined"
 
     return "non-match"
@@ -149,7 +165,7 @@ def biased_random(min_val, max_val, bias, strength=3):
     return min(max(value, min_val), max_val)  # Clamp in case of rounding edge cases
 
 
-def run_experiment():
+def run_experiment(match_mode):
     if (match_mode == "match"):
         input_seq_dir = match_input_seq_dir
         output_signal_dir = match_output_signal_dir
@@ -159,6 +175,9 @@ def run_experiment():
 
     os.makedirs(input_seq_dir, exist_ok=True)
     os.makedirs(output_signal_dir, exist_ok=True)
+    # results_csv = f"test_main/results/{test_signal_name}_{match_mode}_scores.csv"
+    results_csv = f"test_main/results/{redirected_target_name}_scores.csv"
+
     csv_file_exists = os.path.exists(results_csv)
 
     # Create csv file to store results
@@ -169,54 +188,62 @@ def run_experiment():
         if not csv_file_exists:
             writer.writerow(["RunID", "Filename", "TargetLength",
                             "EucScore", "NCCScore", "DTWScore",
-                            "EucAlign", "NCCAlign", "DTWAlign",
+                            "EucAlign", "NCCAlign", "DTWAlign", "DTWBestDist",
                             "ExpectedLabel", "ActualLabel"])
 
         # Iterate for number of targets we want to create
         for i in range(curr_last_target_idx + 1, curr_last_target_idx + num_targets + 1):
 
-            if target_bias_length != 0:
-                target_length = biased_random(target_min_length, target_max_length, target_bias_length)
-            else:
-                target_length = random.randint(target_min_length, target_max_length)
-
-            # Create Target Sequence
-            test_seq = read_fasta_sequence(test_sequence_path)
-
-            if (match_mode == "match"):
-                target_seq = generate_matching_subsequence(target_length, test_seq)
-            else:
-                target_seq = generate_non_matching_subsequence(target_length, test_seq)
+            if use_existing_target:
+                target_seq = read_fasta_sequence(f"{input_seq_dir}/{redirected_target_name}_target_{i}.fa")
+                signal_path = os.path.join(output_signal_dir, f"{redirected_target_name}_target_{i}.blow5")
+                target_length = len(target_seq)
+                filename = f"{test_signal_name}_target_{i}.fa"
             
-            # Initialise name for files (target)
-            filename = f"target_{i}.fa"
-            fasta_path = os.path.join(input_seq_dir, filename)
-            signal_path = os.path.join(output_signal_dir, f"target_{i}.blow5")
+            else:
+                if target_bias_length != 0:
+                    target_length = biased_random(target_min_length, target_max_length, target_bias_length)
+                else:
+                    target_length = random.randint(target_min_length, target_max_length)
 
-            # Create fasta, run squigulator on it
-            write_fasta(target_seq, fasta_path, id=i)
-            run_squigulator(fasta_path, signal_path)
+                # Create Target Sequence
+                test_seq = read_fasta_sequence(test_sequence_path)
+
+                if (match_mode == "match"):
+                    target_seq = generate_matching_subsequence(target_length, test_seq)
+                else:
+                    target_seq = generate_non_matching_subsequence(target_length, test_seq)
+                
+                # Initialise name for files (target)
+                filename = f"{redirected_target_name}_target_{i}.fa"
+                fasta_path = os.path.join(input_seq_dir, filename)
+                signal_path = os.path.join(output_signal_dir, f"{redirected_target_name}_target_{i}.blow5")
+
+                # Create fasta, run squigulator on it
+                write_fasta(target_seq, fasta_path, id=i)
+                run_squigulator(fasta_path, signal_path)
 
             # Get match info and write to results file
-            eucScore, eucAlign = compute_match_probability("EUC", signal_path, test_signal_path)
-            NCCScore, NCCAlign = compute_match_probability("NCC", signal_path, test_signal_path)
-            DTWScore, DTWAlign = compute_match_probability("DTW", signal_path, test_signal_path)
+            eucScore, eucAlign, _ = compute_match_probability("EUC", signal_path, test_signal_path)
+            DTWScore, DTWAlign, dtwBestDist = compute_match_probability("DTW", signal_path, test_signal_path)
+            NCCScore, NCCAlign, _ = compute_match_probability("NCC", signal_path, test_signal_path)
 
-            match_outcome = get_match_outcome(NCCScore, DTWScore)
+            match_outcome = get_match_outcome(NCCScore, DTWScore, NCCAlign, DTWAlign)
             
+            # eucscore -> NCCBestDTWAlign
             writer.writerow([i, filename, target_length, eucScore, NCCScore, DTWScore,
-                             eucAlign, NCCAlign, DTWAlign, match_mode, match_outcome])
+                             eucAlign, NCCAlign, DTWAlign, dtwBestDist, match_mode, match_outcome])
             
             print(f"[{i}] {filename} | Target Length: {target_length} | "
                 f"Euclidean Score: {eucScore:.2f}, NCC Score: {NCCScore:.2f}, DTW Score: {DTWScore:.2f} | "
-                f"Euclidean Align: {eucAlign}, NCC Align: {NCCAlign}, DTW Align: {DTWAlign} | "
+                f"Euclidean Align: {eucAlign}, NCC Align: {NCCAlign}, DTW Align: {DTWAlign}, DTWBestDist: {dtwBestDist} | "
                 f"Mode: {match_mode} | Outcome: {match_outcome}")
         
         print(f"DONE! Created {num_targets} targets in {match_mode}.")
         print(f"See results at: {results_csv}")
 
 
-def generate_test_signal(length, filename, filedir_seq, filedir_signal):
+def generate_test_signal(length, filename, filedir_seq, filedir_signal, ideal_flag):
     # Create random sequence
     signal_seq = u.create_random_sequence(length)
     
@@ -226,20 +253,27 @@ def generate_test_signal(length, filename, filedir_seq, filedir_signal):
 
     # Create fasta, run squigulator on it
     write_fasta(signal_seq, fasta_path, filename=filename)
-    run_squigulator(fasta_path, signal_path, ideal="ideal-amp")
+    run_squigulator(fasta_path, signal_path, ideal=ideal_flag)
 
 
 # === MAIN PIPELINE ===
 if __name__ == "__main__":
 
-    confirm_idx = input("Please confirm that you have updated the curr_last_target_idx. " \
-    f"\nIs {curr_last_target_idx} still the correct last target index for {match_mode}?: (y/n)")
+    # confirm_idx = input("Please confirm that you have updated the curr_last_target_idx. " \
+    # f"\nIs {curr_last_target_idx} still the correct last target index for {match_mode}?: (y/n)")
 
-    confirm_result_csv = input("\nPlease confirm the location to save the results. " \
-    f"\nDo you want to save the {match_mode} results at {results_csv}?: (y/n)")
+    # confirm_result_csv = input("\nPlease confirm the location to save the results. " \
+    # f"\nDo you want to save the {match_mode} results at {results_csv}?: (y/n)")
+
+    confirm_idx = 'y' 
+    confirm_result_csv = 'y'
 
     if ((confirm_idx.lower() == 'y' or confirm_idx.lower() == 'yes') 
         and (confirm_result_csv.lower() == 'y' or confirm_result_csv.lower() == 'yes')):
-        run_experiment()
+        if match_expectation =='both':
+            run_experiment("match")
+            run_experiment("non-match")
+        else:
+            run_experiment(match_expectation)
 
-    # generate_test_signal(25000, "long_random_25000", "test_main/test_signals", "test_main/test_signals")
+    # generate_test_signal(1000, "short_random_1000", "test_main/test_signals", "test_main/test_signals", "ideal-amp")

@@ -1,5 +1,8 @@
+import time
 import numpy as np
+from numba import njit
 from fastdtw import fastdtw
+from dtaidistance import dtw
 from scipy.spatial.distance import euclidean
 
 import utils as u
@@ -9,28 +12,34 @@ import utils as u
 #  DTW scoring functions  #
 ###########################
 
-# match 80% non-match 50-60%
-# zscore + margin
-def score_dtw_match(best_distance, distances):
+def score_dtw_match(best_distance, distances, n_windows):
     distances = np.array(distances)
     mean = np.mean(distances)
-    std = np.std(distances) + 1e-8
+    std  = np.std(distances) + 1e-8
 
-    # Boosted z-score component (exponential stretch)
-    z = (mean - best_distance) / std
-    z_scaled = ((z + 3) / 6) ** 2.5 * 100  # steeper than quadratic
+    # 1. z-score (same as before)
+    z        = (mean - best_distance) / std
+    z_scaled = ((z + 3.5) / 7) ** 2 * 100
     z_scaled = np.clip(z_scaled, 0, 100)
 
-    # Margin component (smaller weight)
+    # 2. margin vs. top-10 %
     sorted_d = np.sort(distances)
-    if len(sorted_d) < 2:
+    k = max(2, int(0.1 * len(sorted_d))) 
+    top10 = sorted_d[:k]
+    if k <= 2:
         margin_score = 100.0
     else:
-        margin = sorted_d[1] - sorted_d[0]
-        margin_ratio = margin / (sorted_d[1] + 1e-8)
+        top10_rest_mean = np.mean(top10[1:])
+        margin = top10_rest_mean - top10[0]
+        margin_ratio = margin / (top10_rest_mean + 1e-8)
         margin_score = np.clip(margin_ratio * 100, 0, 100)
 
-    return float(0.75 * z_scaled + 0.25 * margin_score)
+    base_score = 0.75 * z_scaled + 0.25 * margin_score
+
+    # 3. penalise large search space
+    correction = (np.log10(n_windows + 1) / 4) * 1.25
+    adjusted   = base_score / correction
+    return float(np.clip(adjusted, 0, 100))
 
 
 # match ~100% non-match 70-80%
@@ -81,6 +90,8 @@ def margin_score(best_distance, distances):
 ###########################
 
 def euclidean_distance_match(target: np.ndarray, signal: np.ndarray):
+    signal = (signal - np.mean(signal)) / np.std(signal)
+
     m, n = len(target), len(signal)
     min_dist = float('inf')
     best_pos = 0
@@ -101,8 +112,6 @@ def euclidean_distance_match(target: np.ndarray, signal: np.ndarray):
 def ncc_match(target: np.ndarray, signal: np.ndarray):
     m, n = len(target), len(signal)
 
-    t_norm = (target - np.mean(target)) / (np.std(target) + 1e-6)
-
     max_score = -np.inf
     best_pos = 0
 
@@ -114,7 +123,7 @@ def ncc_match(target: np.ndarray, signal: np.ndarray):
 
         # Make sure both window and taget is z-score normalized 
         # (zero mean and unit variance) for score in range [-1,1]
-        score = np.dot(t_norm, w_norm) / m  # cosine similarity
+        score = np.dot(target, w_norm) / m  # cosine similarity 
         if score > max_score:
             max_score = score
             best_pos = i
@@ -123,43 +132,63 @@ def ncc_match(target: np.ndarray, signal: np.ndarray):
     return probability, best_pos
 
 
-# TODO: can you just change the scoring function here to make it correct
-# or should this just be fn for best_subsequence_match?
+def dtw_distance_pruned_with_band(target, window, band_percent=0.1):
+    N = len(target)
+    band = max(1, int(N * band_percent))
+    return dtw.distance(
+        target,
+        window,
+        use_c=True,
+        use_pruning=True,
+        window=band
+    )
+
+@njit
 def fastdtw_subsequence_match(target, test_signal, radius=1, stride=10, scale_window=True):
+    start_time = time.time()
+    start_cpu = time.process_time()
+
     len_target = len(target)
     n_windows = (len(test_signal) - len_target) // stride + 1
-
-    if scale_window:
-        target = (target - np.mean(target)) / (np.std(target) + 1e-8)
 
     distances = []
     positions = []
 
-    for w in range(n_windows):
-        start = w * stride
-        end = start + len_target
+    norm_windows = u.batch_normalize_windows(test_signal, len_target, stride, scale_window)
 
-        if end > len(test_signal):
-            break
+    target_seq = u.to_vector_sequence(target)
+    target_flat  = np.asarray(target, dtype=float)
 
-        window = test_signal[start:end]
-
-        if scale_window:
-            window = (window - np.mean(window)) / (np.std(window) + 1e-8)
-
-        target_seq = u.to_vector_sequence(target)
-        window_seq = u.to_vector_sequence(window)
-
-        distance, _ = fastdtw(target_seq, window_seq, radius=radius, dist=euclidean)
+    for w, window in enumerate(norm_windows):
+        if len(test_signal) > 0:
+            window_flat  = np.asarray(window, dtype=float).ravel()
+            distance = dtw_distance_pruned_with_band(target_flat, window_flat, band_percent=0.2)
+        else:
+            distance, _ = fastdtw(target_seq, window.reshape(-1, 1), radius=radius, dist=euclidean)
 
         distances.append(distance)
-        positions.append(start)
+        positions.append(w * stride)
 
     distances = np.array(distances)
     best_idx = np.argmin(distances)
     best_distance = distances[best_idx]
     best_index = positions[best_idx]
 
-    match_probability = score_dtw_match(best_distance, distances)
+    # distances_norm = normalize_distances(np.array(distances), len_target)
+    # best_idx = np.argmin(distances_norm)
+    # best_distance = distances_norm[best_idx]
+    # best_index = positions[best_idx]
+
+    # match_probability = tail_model_score(best_distance, distances)
+    match_probability = score_dtw_match(best_distance, distances, n_windows)
+
+    end_time = time.time()
+    end_cpu = time.process_time()
+
+    elapsed_time = end_time - start_time
+    cpu_time = end_cpu - start_cpu
+
+    print(f"Elapsed time: {elapsed_time:.4f} seconds")
+    print(f"CPU time:     {cpu_time:.4f} seconds")
 
     return best_distance, best_index, match_probability

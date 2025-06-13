@@ -13,9 +13,35 @@ def create_run_cmds(path, is_ideal):
     for dir in dir_list:
         print("./squigulator --ideal " + path + "/" + dir + " -o " + "signal_output/test0/" + dir[:-3] + ideal + ".blow5 -n 10")
 
+
 # ensures each element is a 1-D vector
+def to_vector_sequence_before(arr):
+    return [[float(v)] for v in arr] 
+
 def to_vector_sequence(arr):
-    return [[float(v)] for v in arr]  
+    return np.asarray(arr, dtype=np.float32).reshape(-1, 1)
+
+
+def batch_normalize_windows(signal, target_len, stride, normalize=True):
+    n_windows = (len(signal) - target_len) // stride + 1
+    norm_windows = []
+
+    for w in range(n_windows):
+        start = w * stride
+        end = start + target_len
+
+        if end > len(signal):
+            break
+
+        window = signal[start:end]
+        
+        if normalize:
+            window = (window - np.mean(window)) / (np.std(window) + 1e-8)
+
+        norm_windows.append(window)
+
+    return np.array(norm_windows)
+
 
 def trim_padding(signal: np.ndarray, 
                  window_size: int = 5, 
@@ -52,3 +78,42 @@ def count_base_content(sequence):
 
 def create_random_sequence(length):
     return ''.join(random.choices("AGCT", k=length))
+
+import pywt
+
+from scipy.ndimage import median_filter
+from scipy.stats import linregress
+
+def correct_signal_baseline(signal, window_size=1000):
+        # Can optimise with parallel programming mp (multiprocessing)
+        corrected_signal = signal
+        window_size = int(len(signal) * 0.2) 
+        estimated_baseline = median_filter(signal, size=window_size, mode="reflect")
+
+        x = np.arange(len(estimated_baseline))
+        # baseline_slope, _, _, _, _ = linregress(x, estimated_baseline)
+
+        # TODO: should i always remove baseline (for offset) or check the slope (for only drift)
+        # if abs(baseline_slope) > 0.0025:
+        corrected_signal = signal - estimated_baseline
+
+        return corrected_signal
+
+
+def denoise_signal_wavelet(signal, wavelet='db4', level=4, thresholding='soft'):
+    # Perform wavelet decomposition
+    coeffs = pywt.wavedec(signal, wavelet, level=level)
+
+    # Estimate noise level (Median Absolute Deviation method)
+    sigma = np.median(np.abs(coeffs[-1])) / 0.6745
+
+    # Set universal threshold
+    threshold = sigma * np.sqrt(2 * np.log(len(signal))) * 1.2
+
+    # Apply thresholding to detail coefficients
+    new_coeffs = [coeffs[0]] + [pywt.threshold(c, threshold, mode=thresholding) for c in coeffs[1:]]
+
+    # Reconstruct the denoised signal
+    denoised_signal = pywt.waverec(new_coeffs, wavelet)
+
+    return denoised_signal
