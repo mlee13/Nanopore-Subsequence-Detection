@@ -179,7 +179,6 @@ def fastdtw_subsequence_match(target, test_signal, radius=1, stride=10, scale_wi
     # best_distance = distances_norm[best_idx]
     # best_index = positions[best_idx]
 
-    # match_probability = tail_model_score(best_distance, distances)
     match_probability = score_dtw_match(best_distance, distances, n_windows)
 
     end_time = time.time()

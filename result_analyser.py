@@ -1,4 +1,3 @@
-# result_analyser.py
 import re
 from pathlib import Path
 from statistics import mode, StatisticsError
@@ -12,12 +11,7 @@ FLOAT_FMT = "{:.4f}".format       # 4-d.p. everywhere
 results_csv = "tempFYP/test_main/results/long_random_10000_scores.csv"
 
 # ----------------------------------------------------------------------
-# 1.  Helper: safe mode
-# ----------------------------------------------------------------------
-
-
-# ----------------------------------------------------------------------
-# 2.  Core analysis
+# 1. Core analysis
 # ----------------------------------------------------------------------
 def analyse_match_results(csv_path: str | Path):
     """
@@ -26,17 +20,16 @@ def analyse_match_results(csv_path: str | Path):
     2) test_signals_analysis.csv – one row per test-signal (confusion matrix)
     """
     in_path = Path(csv_path)
-    # df      = pd.read_csv(in_path)
 
     # -----------------------------------------------------------------
-    # PRE-PARSE so '>alias' overrides the signal name (Debug mode)
+    # PRE-PARSE so '>alias' overrides the signal name
     # -----------------------------------------------------------------
     with open(in_path) as fh:
         raw_lines = [ln.rstrip("\n") for ln in fh]
 
     header = raw_lines[0].split(",")
     rows   = []
-    current_alias = None           # keeps last seen ">alias"
+    current_alias = None
 
     for ln in raw_lines[1:]:
         if ln.startswith(">"):
@@ -47,7 +40,7 @@ def analyse_match_results(csv_path: str | Path):
 
         row = ln.split(",")
         #  position 1 in the header is "Filename"
-        #  if user provided an alias, replace the filename's signal name
+        #  if alias provided, replace the filename's signal name
         if current_alias:
             # clone row so we don't mutate list re-use
             row = row[:]                 
@@ -58,19 +51,14 @@ def analyse_match_results(csv_path: str | Path):
             )
         rows.append(row)
 
-    # build the DataFrame from the modified rows
     df = pd.DataFrame(rows, columns=header)
-    # --- normalise label strings ----------------------------------------
     df["ActualLabel"]   = df["ActualLabel"].astype(str).str.strip().str.lower()
     df["ExpectedLabel"] = df["ExpectedLabel"].astype(str).str.strip().str.lower()
-
-    #################----------------Debug mode END---------------------
 
     # --- extract test-signal name from Filename -----------------------
     r = re.compile(r"(?P<signal>.+?)_target_.+\.fa$")
     df["TestSignal"] = df["Filename"].str.extract(r, expand=False)
 
-    # cast numerics
     num_cols = ["TargetLength", "EucScore", "NCCScore", "DTWScore", "dtwBestDist"]
     df[num_cols] = df[num_cols].apply(pd.to_numeric, errors="coerce")
 
@@ -122,14 +110,10 @@ def analyse_match_results(csv_path: str | Path):
         # rec["mode_TLen"] = safe_mode(sub["TargetLength"])
         records_a.append(rec)
 
-    # out_a = Path("tempFYP/test_main/results_analysis") / f"{in_path.stem}_analysis.csv"
-    # pd.DataFrame(records_a).round(4).to_csv(out_a, index=False, float_format="%.4f")
-    # print(f"[+] per-set analysis  → {out_a}")
-
     out_a = Path("tempFYP/test_main/results_analysis") / f"{in_path.stem}_analysis.csv"
     new_df_a = pd.DataFrame(records_a).round(4)
 
-    out_a.parent.mkdir(parents=True, exist_ok=True)          # ensure folder exists
+    out_a.parent.mkdir(parents=True, exist_ok=True)
     file_exists = out_a.exists()
     new_df_a.to_csv(
         out_a,
@@ -181,7 +165,7 @@ def analyse_match_results(csv_path: str | Path):
     out_b = Path("tempFYP/test_main/results_analysis/test_signals_analysis.csv")
     new_df_b = pd.DataFrame(records_b).round(4)
 
-    out_b.parent.mkdir(parents=True, exist_ok=True)          # ensure folder exists
+    out_b.parent.mkdir(parents=True, exist_ok=True)
     file_exists = out_b.exists()
     new_df_b.to_csv(
         out_b,
@@ -212,7 +196,6 @@ def pretty_print_csv(csv_path: str | Path, max_rows=20):
         print(f"... ({len(df)-max_rows} more rows)")
     else:
         print(df.to_string(index=False))
-    # reset global option to default
     pd.reset_option("display.float_format")
 
 # ----------------------------------------------------------------------

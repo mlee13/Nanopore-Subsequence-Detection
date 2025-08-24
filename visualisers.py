@@ -13,12 +13,10 @@ def plot_blow5_signal(
     s5 = pyslow5.Open(blow5_path, 'r')  
 
     if read_id is not None:
-        # Fetch a single read by ID
         recs = [s5.read(read_id)]
     else:
-        # Iterate sequentially over reads
         recs = []
-        it = s5.seq_reads()  # generator over all reads
+        it = s5.seq_reads()
         for _ in range(num_reads):
             try:
                 recs.append(next(it))
@@ -26,7 +24,6 @@ def plot_blow5_signal(
                 break
 
     for rec in recs:
-        # raw = np.array(rec['signal'], dtype=np.int16)
         raw = np.array(rec['signal'], dtype=np.int16)
 
         # raw = denoise_signal_wavelet(correct_signal_baseline(np.array(rec['signal'], dtype=np.int16)))
@@ -43,7 +40,6 @@ def plot_blow5_signal(
         print("")
 
         # Convert to picoamperes: pA = (raw + offset) * (range / digitisation)
-        # (see SLOW5 format specification) :contentReference[oaicite:1]{index=1}
         current_pA = (raw + offset) * (range_ / digitisation)
 
         # Build a time axis in seconds
@@ -61,10 +57,10 @@ def plot_blow5_signal(
     s5.close()
 
 
-def plot_overlay(
+def plot_aligned_overlay(
     blow5_path: str,
     blow5_path2: str,
-    align_start: int
+    align_start: int = 0
 ) -> None:
     
     s5 = pyslow5.Open(blow5_path, 'r')  
@@ -90,7 +86,6 @@ def plot_overlay(
     print("")
 
     # Convert to picoamperes: pA = (raw + offset) * (range / digitisation)
-    # (see SLOW5 format specification) :contentReference[oaicite:1]{index=1}
     current_pA = (raw + offset) * (range_ / digitisation)
 
     # Build a time axis in seconds
@@ -98,10 +93,10 @@ def plot_overlay(
 
     plt.figure(figsize=(10, 4))
 
-    # test signal: shown in full
+    # test signal 2 is shown in full
     plt.plot(range(len(raw2)), raw2, label="Test Signal", linewidth=2)
 
-    # target signal: overlay starting at align_start
+    # target signal 1 is overlayed starting at align_start
     plt.plot(range(align_start, align_start + len(raw)), raw, label="Target Signal", linestyle='--', linewidth=2)
 
     plt.title(f"Signal Overlap Starting at Position {align_start}")

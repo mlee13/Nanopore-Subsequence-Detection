@@ -119,7 +119,6 @@ def compute_match_probability(algoCode, target_path, signal_path):
         # print(f"NCC Match probability: {prob:.2f}% at position {pos}")
     elif algoCode == "DTW":
         best_distance, best_idx, prob = m.fastdtw_subsequence_match(target, test_signal)
-        # best_distance, best_idx, prob = m.fastdtw_subsequence_match(target, test_signal, radius=1, stride=5)
         # print(f"Fast DTW Match probability: {match_prob:.2f}% at position {best_index}, with dist: {best_distance}")
     else:
         print("HUH")
@@ -259,8 +258,11 @@ def generate_test_signal(length, filename, filedir_seq, filedir_signal, ideal_fl
 # === MAIN PIPELINE ===
 if __name__ == "__main__":
 
+    # ---------------------------------------------------------------------------------------
+    # Safe gaurd used when running multiple examinations
     # confirm_idx = input("Please confirm that you have updated the curr_last_target_idx. " \
     # f"\nIs {curr_last_target_idx} still the correct last target index for {match_mode}?: (y/n)")
+    # ---------------------------------------------------------------------------------------
 
     # confirm_result_csv = input("\nPlease confirm the location to save the results. " \
     # f"\nDo you want to save the {match_mode} results at {results_csv}?: (y/n)")
